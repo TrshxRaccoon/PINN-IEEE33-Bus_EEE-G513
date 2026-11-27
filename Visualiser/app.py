@@ -564,10 +564,10 @@ const PALETTE = {
 
 // Error Heatmap: 0 is pure white -> yellow -> peach -> coral red (fixed bounds across models!)
 const COLORSCALE_ERROR = [
-  [0.00, "#FFFFFF"],
-  [0.28, PALETTE.yellow],
-  [0.62, PALETTE.peach],
-  [1.00, PALETTE.coral],
+  [0.10, "#FFFFFF"],
+  [0.36, PALETTE.yellow],
+  [0.63, PALETTE.peach],
+  [0.90, PALETTE.coral],
 ];
 
 // Physical Voltage Map: <0.95 pu is distinctly red (#DE7272 at <=0.50 on [0.90, 1.00]), 1.00 pu is green (#4CAF84 / #B4E4D6)
