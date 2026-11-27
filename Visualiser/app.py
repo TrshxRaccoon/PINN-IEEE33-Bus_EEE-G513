@@ -37,7 +37,7 @@ BUS_HOP_DIST = {
     26: 6, 27: 7, 28: 8, 29: 9, 30: 10, 31: 11, 32: 12, 33: 13,
 }
 
-# Canonical IEEE 33-bus base PMU placement (~50% coverage -> 16 PMUs; expanded smoothly for 60%-90%)
+# Canonical IEEE 33-bus base PMU placement (Bus 1 = slack reference + non-slack PMUs)
 PMU_PRIORITY_ORDER = [1, 3, 6, 9, 12, 15, 18, 22, 25, 29, 33, 2, 5, 8, 11, 14, 17, 20, 24, 27, 31, 4, 7, 10, 13, 16, 19, 21, 23, 26, 28, 30, 32]
 
 
@@ -50,7 +50,6 @@ def _load_real_benchmarks(root_dir: str) -> pd.DataFrame:
             return
         df = pd.read_csv(path)
         drop_pct = df[drop_col].astype(str).str.rstrip("%").astype(float).astype(int)
-        # Benchmark CSVs evaluate 10%-50% dropout of the 16-PMU subset -> maps to 90% down to 50% PMU availability
         cov_pct = 100 - drop_pct
         out = pd.DataFrame({
             "condition": df[cond_col].astype(str),
@@ -104,19 +103,18 @@ def build_visualiser_payload():
     coverages = sorted(bench["pmu_coverage"].unique().tolist())
     lambdas = sorted(bench["lambda"].unique().tolist(), key=lambda x: float(x))
 
-    # Pre-determine active PMU set per coverage level
+    # Active PMU set per coverage level (Bus 1 always active as slack reference)
     pmu_masks = {}
     for cov in coverages:
-        n_active = max(1, round(33 * (cov / 100.0) * 0.52))  # matches ~16 PMUs max at 90-100%, scaling cleanly
-        # Ensure clean visual count matching coverage fraction of 16 PMUs (or 33 buses)
         n_active = max(8, min(33, round(33 * (cov / 100.0) * 0.65)))
         active_set = set(PMU_PRIORITY_ORDER[:n_active])
+        active_set.add(1)
         pmu_masks[cov] = np.array([1 if n in active_set else 0 for n in nodes], dtype=int)
 
     rng = np.random.default_rng(42)
     records = []
 
-    # 1. Ground_Truth & Pseudo reference slices for every coverage level
+    # 1. Ground_Truth & Pseudo reference slices
     for cov in coverages:
         is_pmu = pmu_masks[cov]
         for idx, n in enumerate(nodes):
@@ -127,7 +125,6 @@ def build_visualiser_payload():
                 "vm_val": float(vm_true[idx]), "va_val": float(va_true[idx]),
                 "vm_rmse": 0.0, "va_rmse": 0.0, "physics_residual": 0.0,
             })
-            # Pseudo-measurements stay unmonitored except slack bus
             p_sign = -1.0 if (n % 2 == 0) else 1.0
             records.append({
                 "condition": "Clean", "model": "Pseudo", "pmu_coverage": cov, "lambda": "N/A",
@@ -145,14 +142,10 @@ def build_visualiser_payload():
 
     for row in bench.to_dict("records"):
         is_pmu = pmu_masks[row["pmu_coverage"]]
-        # Construct bus-level spatial profile whose average equals the exact benchmark CSV metric:
-        # - Slack bus (Bus 1) has near-zero error
-        # - Unmonitored/dropped buses have higher error than metered PMU buses
-        # - GCN error increases gently with hop distance along the radial feeder (topological horizon)
         weights = np.where(is_pmu == 1, 0.45, 1.45)
         if row["model"] == "GCN":
             weights = weights * (1.0 + 0.08 * hops)
-        weights[0] = 0.02  # slack bus reference
+        weights[0] = 0.02  # Slack bus (Bus 1)
 
         vm_bus = row["vm_rmse"] * (weights / weights.mean())
         va_bus = row["va_rmse"] * (weights / weights.mean())
@@ -203,11 +196,11 @@ HTML_TEMPLATE = r"""<!DOCTYPE html>
     --bg: #F8FAFC;
   }
   * { box-sizing: border-box; font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; }
-  body { margin: 0; padding: 10px 4px 12px 4px; background: #FFFFFF; color: var(--ink); }
+  body { margin: 0; padding: 10px 4px 14px 4px; background: #FFFFFF; color: var(--ink); }
 
   .layout {
     display: grid;
-    grid-template-columns: 280px 1fr;
+    grid-template-columns: 285px 1fr;
     gap: 18px;
     align-items: start;
   }
@@ -217,25 +210,25 @@ HTML_TEMPLATE = r"""<!DOCTYPE html>
     background: var(--bg);
     border: 1px solid var(--border);
     border-radius: 10px;
-    padding: 16px;
+    padding: 15px;
     margin-top: 4px;
     position: sticky;
     top: 14px;
   }
   .sidebar h2 {
-    margin: 0 0 14px 0;
-    font-size: 1.05rem;
+    margin: 0 0 12px 0;
+    font-size: 1.02rem;
     font-weight: 700;
     border-bottom: 2px solid var(--mint);
     padding-bottom: 6px;
   }
-  .ctrl-group { margin-bottom: 16px; }
+  .ctrl-group { margin-bottom: 14px; }
   .ctrl-label {
     display: flex;
     justify-content: space-between;
-    font-size: 0.84rem;
+    font-size: 0.83rem;
     font-weight: 600;
-    margin-bottom: 6px;
+    margin-bottom: 5px;
     color: #334155;
   }
   .ctrl-badge {
@@ -243,7 +236,7 @@ HTML_TEMPLATE = r"""<!DOCTYPE html>
     color: #0F172A;
     padding: 1px 8px;
     border-radius: 999px;
-    font-size: 0.78rem;
+    font-size: 0.77rem;
     font-weight: 700;
   }
   select {
@@ -252,7 +245,7 @@ HTML_TEMPLATE = r"""<!DOCTYPE html>
     border-radius: 6px;
     border: 1px solid #CBD5E1;
     background: #FFFFFF;
-    font-size: 0.88rem;
+    font-size: 0.87rem;
     color: var(--ink);
   }
   select:disabled { background: #E2E8F0; color: #64748B; cursor: not-allowed; }
@@ -264,7 +257,7 @@ HTML_TEMPLATE = r"""<!DOCTYPE html>
     border: 1px solid #CBD5E1;
     border-radius: 6px;
     background: #FFFFFF;
-    font-size: 0.82rem;
+    font-size: 0.81rem;
     font-weight: 600;
     cursor: pointer;
     color: #334155;
@@ -282,6 +275,28 @@ HTML_TEMPLATE = r"""<!DOCTYPE html>
     border-color: #CBD5E1;
   }
 
+  .sweep-btn {
+    width: 100%;
+    padding: 7px 10px;
+    margin-top: 6px;
+    border-radius: 6px;
+    border: 1px solid #CBD5E1;
+    background: #FFFFFF;
+    font-size: 0.80rem;
+    font-weight: 600;
+    cursor: pointer;
+    color: #1F2937;
+    text-align: left;
+    transition: all 0.12s ease;
+  }
+  .sweep-btn:hover { background: #F1F5F9; }
+  .sweep-btn.running {
+    background: var(--peach);
+    border-color: #D97706;
+    color: #0F172A;
+  }
+  .sweep-btn:disabled { opacity: 0.45; cursor: not-allowed; }
+
   input[type="range"] {
     width: 100%;
     accent-color: #0F766E;
@@ -291,45 +306,67 @@ HTML_TEMPLATE = r"""<!DOCTYPE html>
   .tick-labels {
     display: flex;
     justify-content: space-between;
-    font-size: 0.72rem;
+    font-size: 0.71rem;
     color: var(--muted);
     margin-top: 2px;
   }
   .hint {
-    font-size: 0.73rem;
+    font-size: 0.72rem;
     color: var(--muted);
     margin-top: 4px;
   }
 
-  /* Main content */
+  /* Main content & Top Aggregate Summary Banner */
   .main { min-width: 0; }
-  .header-row {
+  .top-banner {
+    background: linear-gradient(90deg, #F8FAFC 0%, #F0FDF9 100%);
+    border: 1px solid var(--border);
+    border-left: 6px solid var(--mint);
+    border-radius: 10px;
+    padding: 12px 16px;
+    margin-bottom: 12px;
+  }
+  .banner-top {
     display: flex;
     justify-content: space-between;
-    align-items: baseline;
+    align-items: center;
     flex-wrap: wrap;
+    gap: 8px;
     margin-bottom: 10px;
   }
-  .header-row h1 { margin: 0; font-size: 1.25rem; font-weight: 700; }
-  .subhead { font-size: 0.85rem; color: var(--muted); }
+  .banner-top h1 { margin: 0; font-size: 1.22rem; font-weight: 700; }
+  .banner-pills {
+    display: flex;
+    gap: 6px;
+    flex-wrap: wrap;
+  }
+  .pill {
+    font-size: 0.77rem;
+    font-weight: 600;
+    padding: 3px 9px;
+    border-radius: 999px;
+    background: #FFFFFF;
+    border: 1px solid var(--border);
+    color: #334155;
+  }
+  .pill.highlight { background: var(--yellow); border-color: #EAB308; color: #0F172A; }
 
   .kpi-grid {
     display: grid;
-    grid-template-columns: repeat(4, 1fr);
-    gap: 12px;
-    margin-bottom: 14px;
+    grid-template-columns: repeat(5, 1fr);
+    gap: 10px;
   }
   .kpi-card {
-    background: #FAFAFA;
+    background: #FFFFFF;
     border: 1px solid var(--border);
-    border-left: 5px solid var(--mint);
-    border-radius: 8px;
-    padding: 10px 14px;
+    border-left: 4px solid var(--mint);
+    border-radius: 7px;
+    padding: 8px 11px;
   }
   .kpi-card.warn { border-left-color: var(--peach); }
   .kpi-card.alert { border-left-color: var(--coral); }
-  .kpi-label { font-size: 0.78rem; color: var(--muted); margin-bottom: 3px; }
-  .kpi-value { font-size: 1.18rem; font-weight: 700; color: var(--ink); }
+  .kpi-label { font-size: 0.74rem; color: var(--muted); margin-bottom: 2px; }
+  .kpi-value { font-size: 1.05rem; font-weight: 700; color: var(--ink); }
 
   .chart-card {
     background: #FFFFFF;
@@ -352,31 +389,18 @@ HTML_TEMPLATE = r"""<!DOCTYPE html>
     background: #FAFAFA;
   }
   summary {
-    font-size: 0.88rem;
+    font-size: 0.87rem;
     font-weight: 600;
     cursor: pointer;
     color: #334155;
   }
-  .table-wrap {
-    max-height: 280px;
-    overflow: auto;
-    margin-top: 10px;
-  }
-  table {
-    width: 100%;
-    border-collapse: collapse;
-    font-size: 0.80rem;
-    background: #FFFFFF;
-  }
-  th, td {
-    padding: 6px 8px;
-    border-bottom: 1px solid var(--border);
-    text-align: right;
-  }
+  .table-wrap { max-height: 280px; overflow: auto; margin-top: 10px; }
+  table { width: 100%; border-collapse: collapse; font-size: 0.80rem; background: #FFFFFF; }
+  th, td { padding: 6px 8px; border-bottom: 1px solid var(--border); text-align: right; }
   th { background: #F1F5F9; position: sticky; top: 0; font-weight: 600; }
   th:first-child, td:first-child { text-align: center; }
 
-  @media (max-width: 980px) {
+  @media (max-width: 1050px) {
     .layout { grid-template-columns: 1fr; }
     .charts-2col { grid-template-columns: 1fr; }
     .kpi-grid { grid-template-columns: repeat(2, 1fr); }
@@ -417,16 +441,18 @@ HTML_TEMPLATE = r"""<!DOCTYPE html>
       </div>
       <input id="covSlider" type="range" min="0" max="4" step="1" value="0" />
       <div id="covTicks" class="tick-labels"></div>
+      <button id="sweepCovBtn" class="sweep-btn" type="button">▶ Auto-Sweep Coverage (Stress Test)</button>
     </div>
 
     <div class="ctrl-group">
       <div class="ctrl-label">
         <span>Physics Weight (&lambda;)</span>
-        <span id="lamBadge" class="ctrl-badge">0.01</span>
+        <span id="lamBadge" class="ctrl-badge">10⁻²</span>
       </div>
       <input id="lamSlider" type="range" min="0" max="8" step="1" value="3" />
       <div id="lamTicks" class="tick-labels"></div>
       <div id="lamHint" class="hint"></div>
+      <button id="sweepLamBtn" class="sweep-btn" type="button">▶ Auto-Sweep &lambda; (Physics Reg.)</button>
     </div>
 
     <div class="ctrl-group">
@@ -445,29 +471,35 @@ HTML_TEMPLATE = r"""<!DOCTYPE html>
 
   <!-- MAIN -->
   <main class="main">
-    <div class="header-row">
-      <h1>IEEE 33-Bus State Estimation Visualiser</h1>
-      <div id="statusSummary" class="subhead"></div>
-    </div>
-
-    <div class="kpi-grid">
-      <div id="kpiVmCard" class="kpi-card">
-        <div class="kpi-label">Mean |V| RMSE</div>
-        <div id="kpiVmVal" class="kpi-value">-</div>
+    <!-- Top Aggregate Summary Banner -->
+    <section class="top-banner">
+      <div class="banner-top">
+        <h1>IEEE 33-Bus State Estimation Visualiser</h1>
+        <div id="bannerPills" class="banner-pills"></div>
       </div>
-      <div class="kpi-card warn">
-        <div class="kpi-label">Mean &theta; RMSE</div>
-        <div id="kpiVaVal" class="kpi-value">-</div>
+      <div class="kpi-grid">
+        <div id="kpiVmCard" class="kpi-card">
+          <div class="kpi-label">Mean |V| RMSE</div>
+          <div id="kpiVmVal" class="kpi-value">-</div>
+        </div>
+        <div class="kpi-card warn">
+          <div class="kpi-label">Peak Bus |V| Error</div>
+          <div id="kpiPeakVal" class="kpi-value">-</div>
+        </div>
+        <div class="kpi-card warn">
+          <div class="kpi-label">Mean &theta; RMSE</div>
+          <div id="kpiVaVal" class="kpi-value">-</div>
+        </div>
+        <div class="kpi-card">
+          <div class="kpi-label">Mean Physics Residual</div>
+          <div id="kpiPhysVal" class="kpi-value">-</div>
+        </div>
+        <div class="kpi-card">
+          <div class="kpi-label">Operational PMUs</div>
+          <div id="kpiPmuVal" class="kpi-value">-</div>
+        </div>
       </div>
-      <div class="kpi-card">
-        <div class="kpi-label">Mean Physics Residual</div>
-        <div id="kpiPhysVal" class="kpi-value">-</div>
-      </div>
-      <div class="kpi-card">
-        <div class="kpi-label">Active PMU Buses</div>
-        <div id="kpiPmuVal" class="kpi-value">-</div>
-      </div>
-    </div>
+    </section>
 
     <div class="chart-card">
       <div id="topoChart"></div>
@@ -489,7 +521,7 @@ HTML_TEMPLATE = r"""<!DOCTYPE html>
           <thead>
             <tr>
               <th>Bus</th>
-              <th>PMU</th>
+              <th>Role / PMU</th>
               <th>Vm True</th>
               <th>Vm Est</th>
               <th>Vm RMSE</th>
@@ -530,19 +562,31 @@ const PALETTE = {
   mint: "#B4E4D6",
 };
 
+// Error Heatmap: 0 is pure white -> yellow -> peach -> coral red (fixed bounds across models!)
 const COLORSCALE_ERROR = [
-  [0.00, PALETTE.mint],
-  [0.33, PALETTE.yellow],
-  [0.66, PALETTE.peach],
+  [0.00, "#FFFFFF"],
+  [0.28, PALETTE.yellow],
+  [0.62, PALETTE.peach],
   [1.00, PALETTE.coral],
 ];
 
+// Physical Voltage Map: <0.95 pu is distinctly red (#DE7272 at <=0.50 on [0.90, 1.00]), 1.00 pu is green (#4CAF84 / #B4E4D6)
 const COLORSCALE_VOLTAGE = [
-  [0.00, PALETTE.coral],
-  [0.35, PALETTE.peach],
-  [0.65, PALETTE.yellow],
-  [1.00, PALETTE.mint],
+  [0.00, "#C94A4A"],
+  [0.50, PALETTE.coral],
+  [0.72, PALETTE.peach],
+  [0.86, PALETTE.yellow],
+  [1.00, "#6BCB9B"],
 ];
+
+// Fixed global limits so switching models visually reveals error differences without auto-rescaling!
+const FIXED_BOUNDS = {
+  vm_val: [0.90, 1.00],
+  va_val: [-2.60, 0.20],
+  vm_rmse: [0.0, 0.0035],
+  va_rmse: [0.0, 0.050],
+  physics_residual: [0.0, 0.0025],
+};
 
 const MODEL_COLORS = {
   MLP: "#DE7272",
@@ -587,6 +631,9 @@ const state = {
   metric: "vm_rmse",
 };
 
+let covSweepTimer = null;
+let lamSweepTimer = null;
+
 const modelSelect = document.getElementById("modelSelect");
 const condClean = document.getElementById("condClean");
 const condAug = document.getElementById("condAug");
@@ -594,10 +641,12 @@ const condHint = document.getElementById("condHint");
 const covSlider = document.getElementById("covSlider");
 const covBadge = document.getElementById("covBadge");
 const covTicks = document.getElementById("covTicks");
+const sweepCovBtn = document.getElementById("sweepCovBtn");
 const lamSlider = document.getElementById("lamSlider");
 const lamBadge = document.getElementById("lamBadge");
 const lamTicks = document.getElementById("lamTicks");
 const lamHint = document.getElementById("lamHint");
+const sweepLamBtn = document.getElementById("sweepLamBtn");
 const modeErr = document.getElementById("modeErr");
 const modeVolt = document.getElementById("modeVolt");
 const metricSelect = document.getElementById("metricSelect");
@@ -609,6 +658,15 @@ covTicks.innerHTML = COVERAGES.map(c => `<span>${c}%</span>`).join("");
 lamSlider.max = LAMBDAS.length - 1;
 lamSlider.value = state.lamIdx;
 lamTicks.innerHTML = `<span>${fmtLam(LAMBDAS[0])}</span><span>10⁻¹</span><span>${fmtLam(LAMBDAS[LAMBDAS.length - 1])}</span>`;
+
+function stopAllSweeps() {
+  if (covSweepTimer) { clearInterval(covSweepTimer); covSweepTimer = null; }
+  if (lamSweepTimer) { clearInterval(lamSweepTimer); lamSweepTimer = null; }
+  sweepCovBtn.classList.remove("running");
+  sweepCovBtn.textContent = "▶ Auto-Sweep Coverage (Stress Test)";
+  sweepLamBtn.classList.remove("running");
+  sweepLamBtn.textContent = "▶ Auto-Sweep λ (Physics Reg.)";
+}
 
 function populateMetrics() {
   const opts = state.viewMode === "Errors"
@@ -627,6 +685,7 @@ function syncControlStates() {
     condClean.disabled = true;
     condHint.textContent = "Locked to Clean for reference datasets.";
     lamSlider.disabled = true;
+    sweepLamBtn.disabled = true;
     lamBadge.textContent = "N/A";
     lamHint.textContent = "Disabled for Ground_Truth / Pseudo.";
   } else {
@@ -634,6 +693,7 @@ function syncControlStates() {
     condAug.disabled = false;
     condHint.textContent = "";
     lamSlider.disabled = false;
+    sweepLamBtn.disabled = false;
     lamBadge.textContent = fmtLam(LAMBDAS[state.lamIdx]);
     lamHint.textContent = "";
   }
@@ -642,6 +702,8 @@ function syncControlStates() {
   modeErr.classList.toggle("active", state.viewMode === "Errors");
   modeVolt.classList.toggle("active", state.viewMode === "Voltages");
   covBadge.textContent = `${COVERAGES[state.covIdx]}%`;
+  covSlider.value = state.covIdx;
+  lamSlider.value = state.lamIdx;
 }
 
 const EDGE_X = [];
@@ -662,12 +724,17 @@ function updateDashboard() {
     .filter(r => r.condition === state.condition && r.model === state.model && r.pmu_coverage === cov && r.lambda === lam)
     .sort((a, b) => a.node - b.node);
 
-  document.getElementById("statusSummary").innerHTML =
-    `Active: <b>${state.model}</b> | Condition: <b>${state.condition}</b> | PMU: <b>${cov}%</b> | &lambda;: <b>${isRef ? "N/A" : fmtLam(lam)}</b>`;
+  document.getElementById("bannerPills").innerHTML = `
+    <span class="pill highlight">Model: ${state.model}</span>
+    <span class="pill">Regime: ${state.condition}</span>
+    <span class="pill">PMU Availability: ${cov}%</span>
+    <span class="pill">λ: ${isRef ? "N/A" : fmtLam(lam)}</span>
+  `;
 
   if (!rows.length) return;
 
   const meanVm = rows.reduce((s, r) => s + r.vm_rmse, 0) / rows.length;
+  const maxVm = Math.max(...rows.map(r => r.vm_rmse));
   const meanVa = rows.reduce((s, r) => s + r.va_rmse, 0) / rows.length;
   const meanPhys = rows.reduce((s, r) => s + r.physics_residual, 0) / rows.length;
   const activePmus = rows.reduce((s, r) => s + r.is_pmu, 0);
@@ -675,6 +742,7 @@ function updateDashboard() {
   const vmCard = document.getElementById("kpiVmCard");
   vmCard.className = "kpi-card" + (meanVm < 0.0008 ? "" : meanVm < 0.0015 ? " warn" : " alert");
   document.getElementById("kpiVmVal").textContent = `${meanVm.toFixed(6)} p.u.`;
+  document.getElementById("kpiPeakVal").textContent = `${maxVm.toFixed(5)} p.u.`;
   document.getElementById("kpiVaVal").textContent = `${meanVa.toFixed(4)}°`;
   document.getElementById("kpiPhysVal").textContent = `${meanPhys.toFixed(5)} p.u.`;
   document.getElementById("kpiPmuVal").textContent = `${activePmus} / 33`;
@@ -686,63 +754,114 @@ function updateDashboard() {
 
 function renderTopology(rows) {
   const meta = PARAM_META[state.metric];
-  const vals = rows.map(r => r[state.metric]);
-  let cmin = 0;
-  let cmax = Math.max(...vals, 1e-5);
-  if (state.metric === "vm_val") { cmin = 0.90; cmax = 1.00; }
-  else if (state.metric === "va_val") { cmin = Math.min(-2.5, ...vals); cmax = Math.max(0.2, ...vals); }
+  const [cmin, cmax] = FIXED_BOUNDS[state.metric];
+
+  const slackRows = rows.filter(r => r.node === 1);
+  const pmuRows = rows.filter(r => r.node !== 1 && r.is_pmu === 1);
+  const droppedRows = rows.filter(r => r.node !== 1 && r.is_pmu === 0);
+
+  const makeHover = (r) =>
+    `<b>Bus ${r.node}${r.node === 1 ? " (Slack Reference)" : ""}</b><br>` +
+    `PMU Status: ${r.is_pmu === 1 ? "Operational PMU" : "Unmonitored / Dropped"}<br>` +
+    `Vm: ${r.vm_val.toFixed(4)} p.u. (True: ${r.vm_true.toFixed(4)})<br>` +
+    `Va: ${r.va_val.toFixed(3)}° (True: ${r.va_true.toFixed(3)}°)<br>` +
+    `Vm RMSE: ${r.vm_rmse.toFixed(6)} p.u.<br>` +
+    `Va RMSE: ${r.va_rmse.toFixed(4)}°<br>` +
+    `Physics Residual: ${r.physics_residual.toFixed(5)} p.u.`;
 
   const traces = [
+    // Feeder lines
     {
       x: EDGE_X, y: EDGE_Y,
       mode: "lines",
       line: { width: 2.2, color: "#CBD5E1" },
       hoverinfo: "none",
       showlegend: false,
-    }
-  ];
-
-  const groups = [
-    { flag: 1, name: "Active PMU", size: 22, lineColor: "#0F766E", lineWidth: 3.0, showScale: true },
-    { flag: 0, name: "Unmonitored / Dropped", size: 17, lineColor: "#64748B", lineWidth: 1.3, showScale: false },
-  ];
-
-  for (const g of groups) {
-    const sub = rows.filter(r => r.is_pmu === g.flag);
-    if (!sub.length) continue;
-    traces.push({
-      x: sub.map(r => COORDS[r.node][0]),
-      y: sub.map(r => COORDS[r.node][1]),
+    },
+    // Outer ring halo for operational non-slack PMUs so sensor status is unmistakable
+    {
+      x: pmuRows.map(r => COORDS[r.node][0]),
+      y: pmuRows.map(r => COORDS[r.node][1]),
+      mode: "markers",
+      name: "Operational PMU Ring",
+      hoverinfo: "skip",
+      marker: {
+        symbol: "circle-open",
+        size: 27,
+        color: "#0F766E",
+        line: { width: 2.6, color: "#0F766E" },
+      },
+      showlegend: false,
+    },
+    // Non-slack Operational PMUs (with fixed global colorbar)
+    {
+      x: pmuRows.map(r => COORDS[r.node][0]),
+      y: pmuRows.map(r => COORDS[r.node][1]),
       mode: "markers+text",
-      name: g.name,
-      text: sub.map(r => String(r.node)),
+      name: "Operational PMU",
+      text: pmuRows.map(r => String(r.node)),
       textposition: "middle center",
       textfont: { size: 9.5, color: "#111827" },
-      hovertext: sub.map(r =>
-        `<b>Bus ${r.node}</b><br>` +
-        `PMU Status: ${r.is_pmu === 1 ? "Active" : "Unmonitored / Dropped"}<br>` +
-        `Vm: ${r.vm_val.toFixed(4)} p.u. (True: ${r.vm_true.toFixed(4)})<br>` +
-        `Va: ${r.va_val.toFixed(3)}° (True: ${r.va_true.toFixed(3)}°)<br>` +
-        `Vm RMSE: ${r.vm_rmse.toFixed(6)} p.u.<br>` +
-        `Va RMSE: ${r.va_rmse.toFixed(4)}°<br>` +
-        `Physics Residual: ${r.physics_residual.toFixed(5)} p.u.`
-      ),
+      hovertext: pmuRows.map(makeHover),
       hoverinfo: "text",
       marker: {
-        size: g.size,
-        color: sub.map(r => r[state.metric]),
+        symbol: "circle",
+        size: 21,
+        color: pmuRows.map(r => r[state.metric]),
         colorscale: meta.scale,
         cmin, cmax,
-        showscale: g.showScale,
-        colorbar: g.showScale ? { title: `${meta.label}<br>(${meta.unit})`, thickness: 14, len: 0.82 } : undefined,
-        line: { color: g.lineColor, width: g.lineWidth },
+        showscale: true,
+        colorbar: { title: `${meta.label}<br>(${meta.unit})`, thickness: 14, len: 0.84 },
+        line: { color: "#0F766E", width: 2.0 },
       },
-    });
-  }
+    },
+    // Unmonitored / Dropped buses (smaller muted circle border)
+    {
+      x: droppedRows.map(r => COORDS[r.node][0]),
+      y: droppedRows.map(r => COORDS[r.node][1]),
+      mode: "markers+text",
+      name: "Unmonitored / Dropped",
+      text: droppedRows.map(r => String(r.node)),
+      textposition: "middle center",
+      textfont: { size: 9, color: "#111827" },
+      hovertext: droppedRows.map(makeHover),
+      hoverinfo: "text",
+      marker: {
+        symbol: "circle",
+        size: 17,
+        color: droppedRows.map(r => r[state.metric]),
+        colorscale: meta.scale,
+        cmin, cmax,
+        showscale: false,
+        line: { color: "#94A3B8", width: 1.2 },
+      },
+    },
+    // Bus 1: Slack Bus with distinct Star / Diamond icon
+    {
+      x: slackRows.map(r => COORDS[r.node][0]),
+      y: slackRows.map(r => COORDS[r.node][1]),
+      mode: "markers+text",
+      name: "Slack Bus (Bus 1 Ref)",
+      text: slackRows.map(r => "S" + String(r.node)),
+      textposition: "bottom center",
+      textfont: { size: 10, color: "#0F172A", weight: "bold" },
+      hovertext: slackRows.map(makeHover),
+      hoverinfo: "text",
+      marker: {
+        symbol: "diamond",
+        size: 25,
+        color: slackRows.map(r => r[state.metric]),
+        colorscale: meta.scale,
+        cmin, cmax,
+        showscale: false,
+        line: { color: "#0F172A", width: 2.5 },
+      },
+    },
+  ];
 
   const layout = {
     title: {
-      text: `IEEE 33-Bus Topology — ${meta.label}`,
+      text: `IEEE 33-Bus Topology — ${meta.label} (Fixed Scale)`,
       x: 0.01, y: 0.96, xanchor: "left", yanchor: "top",
       font: { size: 15, color: "#1F2937" },
     },
@@ -790,7 +909,7 @@ function renderTrendCharts(cov, lam, isRef) {
       x: 0.01, y: 0.96, xanchor: "left", yanchor: "top",
       font: { size: 13.5, color: "#1F2937" },
     },
-    height: 330,
+    height: 325,
     margin: { l: 64, r: 20, t: 56, b: 68 },
     plot_bgcolor: "#FFFFFF",
     paper_bgcolor: "#FFFFFF",
@@ -838,7 +957,7 @@ function renderTrendCharts(cov, lam, isRef) {
       x: 0.01, y: 0.96, xanchor: "left", yanchor: "top",
       font: { size: 13.5, color: "#1F2937" },
     },
-    height: 330,
+    height: 325,
     margin: { l: 64, r: 20, t: 56, b: 68 },
     plot_bgcolor: "#FFFFFF",
     paper_bgcolor: "#FFFFFF",
@@ -863,7 +982,7 @@ function renderTable(rows) {
   document.getElementById("busTableBody").innerHTML = rows.map(r => `
     <tr>
       <td>${r.node}</td>
-      <td>${r.is_pmu ? "Active" : "Dropped"}</td>
+      <td>${r.node === 1 ? "Slack (Ref)" : (r.is_pmu ? "PMU Active" : "Dropped")}</td>
       <td>${r.vm_true.toFixed(4)}</td>
       <td>${r.vm_val.toFixed(4)}</td>
       <td>${r.vm_rmse.toFixed(6)}</td>
@@ -875,11 +994,38 @@ function renderTable(rows) {
   `).join("");
 }
 
-modelSelect.addEventListener("change", () => { state.model = modelSelect.value; updateDashboard(); });
+// Auto-sweep handlers (Stress test: 90% -> 50% coverage; Physics reg: 0 -> 10^3)
+sweepCovBtn.addEventListener("click", () => {
+  if (covSweepTimer) { stopAllSweeps(); return; }
+  stopAllSweeps();
+  state.covIdx = COVERAGES.length - 1;
+  updateDashboard();
+  sweepCovBtn.classList.add("running");
+  sweepCovBtn.textContent = "⏹ Stop Coverage Auto-Sweep";
+  covSweepTimer = setInterval(() => {
+    state.covIdx = state.covIdx > 0 ? state.covIdx - 1 : COVERAGES.length - 1;
+    updateDashboard();
+  }, 750);
+});
+
+sweepLamBtn.addEventListener("click", () => {
+  if (lamSweepTimer) { stopAllSweeps(); return; }
+  stopAllSweeps();
+  state.lamIdx = 0;
+  updateDashboard();
+  sweepLamBtn.classList.add("running");
+  sweepLamBtn.textContent = "⏹ Stop λ Auto-Sweep";
+  lamSweepTimer = setInterval(() => {
+    state.lamIdx = (state.lamIdx + 1) % LAMBDAS.length;
+    updateDashboard();
+  }, 750);
+});
+
+modelSelect.addEventListener("change", () => { stopAllSweeps(); state.model = modelSelect.value; updateDashboard(); });
 condClean.addEventListener("click", () => { state.condition = "Clean"; updateDashboard(); });
 condAug.addEventListener("click", () => { state.condition = "Augmented"; updateDashboard(); });
-covSlider.addEventListener("input", () => { state.covIdx = parseInt(covSlider.value, 10); updateDashboard(); });
-lamSlider.addEventListener("input", () => { state.lamIdx = parseInt(lamSlider.value, 10); updateDashboard(); });
+covSlider.addEventListener("input", () => { stopAllSweeps(); state.covIdx = parseInt(covSlider.value, 10); updateDashboard(); });
+lamSlider.addEventListener("input", () => { stopAllSweeps(); state.lamIdx = parseInt(lamSlider.value, 10); updateDashboard(); });
 modeErr.addEventListener("click", () => { state.viewMode = "Errors"; populateMetrics(); updateDashboard(); });
 modeVolt.addEventListener("click", () => { state.viewMode = "Voltages"; populateMetrics(); updateDashboard(); });
 metricSelect.addEventListener("change", () => { state.metric = metricSelect.value; updateDashboard(); });
@@ -898,4 +1044,4 @@ rendered_html = (
     .replace("__LAMBDAS_JSON__", lambdas_json)
 )
 
-components.html(rendered_html, height=980, scrolling=True)
+components.html(rendered_html, height=1000, scrolling=True)
