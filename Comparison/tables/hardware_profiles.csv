@@ -1,0 +1,4 @@
+Model,Architecture_Type,Total_Parameters,Trainable_Parameters,Checkpoint_Size_MB,Latency_ms_CUDA,RealTime_50Hz_Compliant
+MLP,Dense Feedforward,112194,112194,0.86,0.223,PASS (<20 ms)
+GNN,Edge-Attributed GCN,86402,86402,0.67,2.262,PASS (<20 ms)
+TCN,Dilated Causal 1D CNN,256706,256706,1.97,2.199,PASS (<20 ms)
