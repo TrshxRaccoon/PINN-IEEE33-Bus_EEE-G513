@@ -41,7 +41,8 @@ def load_ybus(
         candidates = [
             os.path.normpath(os.path.join(here, meta_path)),
             os.path.normpath(os.path.join(here, "..", "MLP", "data", "ieee33", "meta.npz")),
-            "D:/BITS Pilani Goa Campus/Academics/ML4EE/ML_Project/MLP/data/ieee33/meta.npz",
+            os.path.normpath(os.path.join(here, "..", "data", "ieee33", "meta.npz")),
+            os.path.normpath(os.path.join(here, "data", "ieee33", "meta.npz")),
         ]
         for c in candidates:
             if os.path.exists(c):

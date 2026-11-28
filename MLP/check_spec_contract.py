@@ -17,7 +17,23 @@ import torch
 from train_mlp import DataContractScaler, IEEE33Dataset, StateEstimatorMLP, power_residual
 
 
-def run_checks(data_dir: str = "data_small/ieee33"):
+def resolve_data_dir(data_dir: str) -> str:
+    here = os.path.dirname(os.path.abspath(__file__))
+    candidates = [
+        data_dir,
+        os.path.join(here, data_dir),
+        os.path.join(here, "data", "ieee33"),
+        os.path.join(here, "..", "data", "ieee33"),
+        os.path.join(here, "data_small", "ieee33"),
+    ]
+    for c in candidates:
+        if os.path.exists(os.path.join(c, "train.npz")) and os.path.exists(os.path.join(c, "meta.npz")):
+            return os.path.abspath(c)
+    return data_dir
+
+
+def run_checks(data_dir: str = "data/ieee33"):
+    data_dir = resolve_data_dir(data_dir)
     print(f"\n================================================================================")
     print(f" RUNNING MANDATORY CONTRACT CHECKS (Spec Section 3, 4, 9, 10)")
     print(f" Checking directory: {data_dir}")
@@ -131,6 +147,6 @@ def run_checks(data_dir: str = "data_small/ieee33"):
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser()
-    parser.add_argument("--data", default="data_small/ieee33", help="Dataset directory to check")
+    parser.add_argument("--data", default="data/ieee33", help="Dataset directory to check")
     args = parser.parse_args()
     run_checks(args.data)

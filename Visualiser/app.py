@@ -30,11 +30,39 @@ st.markdown(
 
 # Radial hop distance from Bus 1 (slack) for realistic topological error distribution
 BUS_HOP_DIST = {
-    1: 0, 2: 1, 3: 2, 4: 3, 5: 4, 6: 5, 7: 6, 8: 7, 9: 8, 10: 9,
-    11: 10, 12: 11, 13: 12, 14: 13, 15: 14, 16: 15, 17: 16, 18: 17,
-    19: 2, 20: 3, 21: 4, 22: 5,
-    23: 3, 24: 4, 25: 5,
-    26: 6, 27: 7, 28: 8, 29: 9, 30: 10, 31: 11, 32: 12, 33: 13,
+    1: 0,
+    2: 1,
+    3: 2,
+    4: 3,
+    5: 4,
+    6: 5,
+    7: 6,
+    8: 7,
+    9: 8,
+    10: 9,
+    11: 10,
+    12: 11,
+    13: 12,
+    14: 13,
+    15: 14,
+    16: 15,
+    17: 16,
+    18: 17,
+    19: 2,
+    20: 3,
+    21: 4,
+    22: 5,
+    23: 3,
+    24: 4,
+    25: 5,
+    26: 6,
+    27: 7,
+    28: 8,
+    29: 9,
+    30: 10,
+    31: 11,
+    32: 12,
+    33: 13,
 }
 
 # Canonical IEEE 33-bus base PMU placement (Bus 1 = slack reference + non-slack PMUs)
@@ -51,15 +79,17 @@ def _load_real_benchmarks(root_dir: str) -> pd.DataFrame:
         df = pd.read_csv(path)
         drop_pct = df[drop_col].astype(str).str.rstrip("%").astype(float).astype(int)
         cov_pct = 100 - drop_pct
-        out = pd.DataFrame({
-            "condition": df[cond_col].astype(str),
-            "model": model_label,
-            "pmu_coverage": cov_pct,
-            "lambda": df[lam_col].astype(float).map(lambda x: str(x)),
-            "vm_rmse": df[vm_col].astype(float),
-            "va_rmse": df[va_col].astype(float),
-            "l_phys": df[lphys_col].astype(float),
-        })
+        out = pd.DataFrame(
+            {
+                "condition": df[cond_col].astype(str),
+                "model": model_label,
+                "pmu_coverage": cov_pct,
+                "lambda": df[lam_col].astype(float).map(lambda x: str(x)),
+                "vm_rmse": df[vm_col].astype(float),
+                "va_rmse": df[va_col].astype(float),
+                "l_phys": df[lphys_col].astype(float),
+            }
+        )
         frames.append(out)
 
     _add(os.path.join(root_dir, "MLP/results_clean/benchmark_clean.csv"), "MLP", "Condition", "Dropout_Level", "Lambda", "RMSE_V_pu", "RMSE_Theta_deg", "L_phys")
@@ -78,19 +108,11 @@ def _load_real_benchmarks(root_dir: str) -> pd.DataFrame:
 def build_visualiser_payload():
     vis_dir = os.path.dirname(__file__)
     root_dir = os.path.dirname(vis_dir)
-    sample_csv = os.path.join(vis_dir, "sample_precomputed_data.csv")
+    sample_csv = os.path.join(vis_dir, "precomputed_data.csv")
 
     base_df = pd.read_csv(sample_csv, keep_default_na=False)
-    gt_base = (
-        base_df[(base_df["model"] == "Ground_Truth") & (base_df["pmu_coverage"] == 50)]
-        .sort_values("node")
-        .drop_duplicates("node")
-    )
-    pseudo_base = (
-        base_df[(base_df["model"] == "Pseudo") & (base_df["pmu_coverage"] == 50)]
-        .sort_values("node")
-        .drop_duplicates("node")
-    )
+    gt_base = base_df[(base_df["model"] == "Ground_Truth") & (base_df["pmu_coverage"] == 50)].sort_values("node").drop_duplicates("node")
+    pseudo_base = base_df[(base_df["model"] == "Pseudo") & (base_df["pmu_coverage"] == 50)].sort_values("node").drop_duplicates("node")
 
     nodes = gt_base["node"].astype(int).tolist()
     vm_true = gt_base["vm_true"].astype(float).values
@@ -118,23 +140,41 @@ def build_visualiser_payload():
     for cov in coverages:
         is_pmu = pmu_masks[cov]
         for idx, n in enumerate(nodes):
-            records.append({
-                "condition": "Clean", "model": "Ground_Truth", "pmu_coverage": cov, "lambda": "N/A",
-                "node": int(n), "is_pmu": int(is_pmu[idx]),
-                "vm_true": float(vm_true[idx]), "va_true": float(va_true[idx]),
-                "vm_val": float(vm_true[idx]), "va_val": float(va_true[idx]),
-                "vm_rmse": 0.0, "va_rmse": 0.0, "physics_residual": 0.0,
-            })
+            records.append(
+                {
+                    "condition": "Clean",
+                    "model": "Ground_Truth",
+                    "pmu_coverage": cov,
+                    "lambda": "N/A",
+                    "node": int(n),
+                    "is_pmu": int(is_pmu[idx]),
+                    "vm_true": float(vm_true[idx]),
+                    "va_true": float(va_true[idx]),
+                    "vm_val": float(vm_true[idx]),
+                    "va_val": float(va_true[idx]),
+                    "vm_rmse": 0.0,
+                    "va_rmse": 0.0,
+                    "physics_residual": 0.0,
+                }
+            )
             p_sign = -1.0 if (n % 2 == 0) else 1.0
-            records.append({
-                "condition": "Clean", "model": "Pseudo", "pmu_coverage": cov, "lambda": "N/A",
-                "node": int(n), "is_pmu": int(is_pmu[idx]),
-                "vm_true": float(vm_true[idx]), "va_true": float(va_true[idx]),
-                "vm_val": float(vm_true[idx] + p_sign * pseudo_vm_err[idx]),
-                "va_val": float(va_true[idx] + p_sign * pseudo_va_err[idx]),
-                "vm_rmse": float(pseudo_vm_err[idx]), "va_rmse": float(pseudo_va_err[idx]),
-                "physics_residual": float(pseudo_res[idx]),
-            })
+            records.append(
+                {
+                    "condition": "Clean",
+                    "model": "Pseudo",
+                    "pmu_coverage": cov,
+                    "lambda": "N/A",
+                    "node": int(n),
+                    "is_pmu": int(is_pmu[idx]),
+                    "vm_true": float(vm_true[idx]),
+                    "va_true": float(va_true[idx]),
+                    "vm_val": float(vm_true[idx] + p_sign * pseudo_vm_err[idx]),
+                    "va_val": float(va_true[idx] + p_sign * pseudo_va_err[idx]),
+                    "vm_rmse": float(pseudo_vm_err[idx]),
+                    "va_rmse": float(pseudo_va_err[idx]),
+                    "physics_residual": float(pseudo_res[idx]),
+                }
+            )
 
     # 2. Real benchmark slices for MLP, GCN, TCN across all Conditions, Coverages & Lambdas (0 to 10^3)
     hops = np.array([BUS_HOP_DIST[n] for n in nodes], dtype=float)
@@ -153,21 +193,23 @@ def build_visualiser_payload():
 
         for idx, n in enumerate(nodes):
             s = signs[idx] if idx > 0 else 0.0
-            records.append({
-                "condition": row["condition"],
-                "model": row["model"],
-                "pmu_coverage": int(row["pmu_coverage"]),
-                "lambda": row["lambda"],
-                "node": int(n),
-                "is_pmu": int(is_pmu[idx]),
-                "vm_true": float(vm_true[idx]),
-                "va_true": float(va_true[idx]),
-                "vm_val": float(vm_true[idx] + s * vm_bus[idx]),
-                "va_val": float(va_true[idx] + s * va_bus[idx]),
-                "vm_rmse": float(vm_bus[idx]),
-                "va_rmse": float(va_bus[idx]),
-                "physics_residual": float(phys_bus[idx]),
-            })
+            records.append(
+                {
+                    "condition": row["condition"],
+                    "model": row["model"],
+                    "pmu_coverage": int(row["pmu_coverage"]),
+                    "lambda": row["lambda"],
+                    "node": int(n),
+                    "is_pmu": int(is_pmu[idx]),
+                    "vm_true": float(vm_true[idx]),
+                    "va_true": float(va_true[idx]),
+                    "vm_val": float(vm_true[idx] + s * vm_bus[idx]),
+                    "va_val": float(va_true[idx] + s * va_bus[idx]),
+                    "vm_rmse": float(vm_bus[idx]),
+                    "va_rmse": float(va_bus[idx]),
+                    "physics_residual": float(phys_bus[idx]),
+                }
+            )
 
     return json.dumps(records), json.dumps(coverages), json.dumps(lambdas)
 
@@ -1036,12 +1078,6 @@ updateDashboard();
 </html>
 """
 
-rendered_html = (
-    HTML_TEMPLATE
-    .replace("__PLOTLY_JS__", plotly_js)
-    .replace("__RECORDS_JSON__", records_json)
-    .replace("__COVERAGES_JSON__", coverages_json)
-    .replace("__LAMBDAS_JSON__", lambdas_json)
-)
+rendered_html = HTML_TEMPLATE.replace("__PLOTLY_JS__", plotly_js).replace("__RECORDS_JSON__", records_json).replace("__COVERAGES_JSON__", coverages_json).replace("__LAMBDAS_JSON__", lambdas_json)
 
 components.html(rendered_html, height=1000, scrolling=True)

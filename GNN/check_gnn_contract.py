@@ -158,8 +158,26 @@ torch.set_default_dtype(torch.float64)
 # ==============================================================================
 # AUTOMATED CONTRACT ASSERTION TEST SUITE
 # ==============================================================================
+def resolve_data_dir(data_dir: str) -> str:
+    if os.path.exists(os.path.join(data_dir, "train.npz")):
+        return os.path.abspath(data_dir)
+    here = os.path.dirname(os.path.abspath(__file__))
+    candidates = [
+        data_dir,
+        os.path.normpath(os.path.join(here, data_dir)),
+        os.path.normpath(os.path.join(here, "..", "MLP", "data", "ieee33")),
+        os.path.normpath(os.path.join(here, "..", "data", "ieee33")),
+        os.path.normpath(os.path.join(here, "data", "ieee33")),
+    ]
+    for c in candidates:
+        if os.path.exists(os.path.join(c, "train.npz")) and os.path.exists(os.path.join(c, "meta.npz")):
+            return os.path.abspath(c)
+    return data_dir
+
+
 def run_checks(data_dir: str = "../MLP/data/ieee33") -> bool:
     t0 = time.time()
+    data_dir = resolve_data_dir(data_dir)
     print("=" * 80)
     print(" RUNNING MANDATORY GNN GRAPH CONTRACT CHECKS")
     print(f" Target dataset directory: {os.path.abspath(data_dir)}")
