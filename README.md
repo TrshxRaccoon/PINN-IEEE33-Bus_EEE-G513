@@ -6,7 +6,6 @@
 [![PyG](https://img.shields.io/badge/PyG-torch__geometric-brightgreen.svg)](https://pyg.org/)
 [![Pandapower](https://img.shields.io/badge/Grid%20Simulation-Pandapower-yellow.svg)](https://www.pandapower.org/)
 [![IEEE Format](https://img.shields.io/badge/Paper-IEEE%20Format-red.svg)](Paper/paper.pdf)
-[![License: MIT](https://img.shields.io/badge/License-MIT-purple.svg)](LICENSE)
 
 ---
 
