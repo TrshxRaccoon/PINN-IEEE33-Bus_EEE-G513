@@ -64,7 +64,7 @@ def resolve_data_dir(data_dir: str) -> str:
         os.path.normpath(os.path.join(here, data_dir)),
         os.path.normpath(os.path.join(here, "..", "MLP", "data", "ieee33")),
         os.path.normpath(os.path.join(here, "..", "data", "ieee33")),
-        "D:/BITS Pilani Goa Campus/Academics/ML4EE/ML_Project/MLP/data/ieee33",
+        os.path.normpath(os.path.join(here, "data", "ieee33")),
     ]
     for c in candidates:
         if os.path.isdir(c) and os.path.exists(os.path.join(c, "meta.npz")):

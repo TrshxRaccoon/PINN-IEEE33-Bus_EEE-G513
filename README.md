@@ -5,7 +5,6 @@
 [![PyTorch](https://img.shields.io/badge/PyTorch-2.0%2B-orange.svg)](https://pytorch.org/)
 [![PyG](https://img.shields.io/badge/PyG-torch__geometric-brightgreen.svg)](https://pyg.org/)
 [![Pandapower](https://img.shields.io/badge/Grid%20Simulation-Pandapower-yellow.svg)](https://www.pandapower.org/)
-[![IEEE Format](https://img.shields.io/badge/Paper-IEEE%20Format-red.svg)](Paper/paper.pdf)
 
 ---
 
@@ -135,14 +134,10 @@ PINN-IEEE33-Bus_EEE-G513/
 │   ├── tables/               # Automated summary tables (hardware_profiles.csv, etc.)
 │   └── plots/                # High-resolution comparative benchmark curves
 │
-├── Visualiser/               # Interactive Grid State Estimation Web App
-│   ├── app.py                # Streamlit dashboard for telemetry & error inspection
-│   └── precomputed_data.csv  # Precomputed snapshot metrics for live exploration
-│
-└── Paper/                    # Research Paper (IEEE Conference Format)
-    ├── paper.tex             # Full LaTeX manuscript source
-    ├── IEEEtran.cls          # IEEE conference style template
-    └── figures/              # Vector and high-DPI raster paper figures
+└── Visualiser/               # Interactive Grid State Estimation Web App
+    ├── app.py                # Streamlit dashboard for telemetry & error inspection
+    ├── precomputed_data.csv  # Precomputed snapshot metrics for live exploration
+    └── README.md             # Visualiser documentation & usage instructions
 ```
 
 ---

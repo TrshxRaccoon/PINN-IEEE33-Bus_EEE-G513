@@ -36,7 +36,8 @@ def resolve_meta_path(meta_path: str = "../MLP/data/ieee33/meta.npz") -> str:
     candidates = [
         os.path.normpath(os.path.join(here, meta_path)),
         os.path.normpath(os.path.join(here, "..", "MLP", "data", "ieee33", "meta.npz")),
-        "D:/BITS Pilani Goa Campus/Academics/ML4EE/ML_Project/MLP/data/ieee33/meta.npz",
+        os.path.normpath(os.path.join(here, "..", "data", "ieee33", "meta.npz")),
+        os.path.normpath(os.path.join(here, "data", "ieee33", "meta.npz")),
     ]
     for c in candidates:
         if os.path.exists(c):
@@ -52,7 +53,8 @@ def resolve_train_path(train_path: str = "../MLP/data/ieee33/train.npz") -> str:
     candidates = [
         os.path.normpath(os.path.join(here, train_path)),
         os.path.normpath(os.path.join(here, "..", "MLP", "data", "ieee33", "train.npz")),
-        "D:/BITS Pilani Goa Campus/Academics/ML4EE/ML_Project/MLP/data/ieee33/train.npz",
+        os.path.normpath(os.path.join(here, "..", "data", "ieee33", "train.npz")),
+        os.path.normpath(os.path.join(here, "data", "ieee33", "train.npz")),
     ]
     for c in candidates:
         if os.path.exists(c):
