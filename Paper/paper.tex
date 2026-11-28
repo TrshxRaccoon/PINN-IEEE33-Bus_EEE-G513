@@ -17,11 +17,9 @@
 \title{Physics-Informed Deep State Estimation Under\\Sensor Dropout in Radial Distribution Networks:\\MLP, GNN, and TCN Trade-offs}
 
 \author{
-\IEEEauthorblockN{Vinayak Singh}
-\IEEEauthorblockA{Department of Electrical Engineering\\
-Institution Name\\
-City, Country\\
-email@institution.edu}
+\IEEEauthorblockN{Manan Arora\IEEEauthorrefmark{1}, Rehan Siddiqui\IEEEauthorrefmark{2}, Vinayak Singh\IEEEauthorrefmark{3}}
+\IEEEauthorblockA{BITS Pilani K K Birla Goa Campus\\
+f2024\{\IEEEauthorrefmark{1}0363, \IEEEauthorrefmark{2}0377, \IEEEauthorrefmark{3}0354\}@goa.bits-pilani.ac.in}
 }
 
 \maketitle
@@ -79,7 +77,7 @@ In contrast, our study evaluates three single-stage architectures on a \textit{d
 \toprule
 \textbf{Method} & \textbf{Mechanism} & \textbf{Limitation Addressed by This Work} \\
 \midrule
-WLS \cite{schweppe1970} & Gauss-Newton & Diverges under dropout; our models are non-iterative ($0.22$--$2.20$~ms) \\
+WLS \cite{schweppe1970} & Gauss-Newton & Diverges under dropout; our models are non-iterative ($0.22$--$2.26$~ms) \\
 \addlinespace
 Black-box DL & Supervised $\mathbf{z}{\to}\mathbf{x}$ & OOD collapse ($+164\%$); we quantify and resolve via augmentation/TCN \\
 \addlinespace
@@ -105,7 +103,7 @@ The state vector $\mathbf{x} = [|\mathbf{V}|, \boldsymbol{\theta}]^T \in \mathbb
 
 \subsection{Model Architectures}
 
-\textbf{Multi-Layer Perceptron (MLP).} A 4-layer fully connected network with 1024 hidden units per layer, ReLU activations, and batch normalization. The input is a 78-dimensional snapshot vector containing all available PMU and pseudo-measurement values. Because every input element connects to every neuron, the MLP can capture cross-correlations between all 33 buses in a single dense forward pass.
+\textbf{Multi-Layer Perceptron (MLP).} A fully connected network with 2 hidden layers of 256 units each ($112{,}194$ parameters), smooth $\tanh$ activations, and double-precision arithmetic. The input is a 114-dimensional snapshot vector structured into 5 blocks: standardized PMU voltage magnitudes and phase angles ($16 \times 2 = 32$), standardized active and reactive power pseudo-measurements ($33 \times 2 = 66$), and raw binary PMU availability indicators ($16$). Because every input element connects to every neuron, the MLP can capture cross-correlations between all 33 buses in a single dense forward pass.
 
 \textbf{Edge-Attributed Graph Convolutional Network (GNN).} A 3-layer Graph Convolutional Network with 128 hidden units per layer (86,402 parameters). Each edge is attributed with the physical line admittance features $[G_{ij}, B_{ij}, |Y_{ij}|, \angle Y_{ij}]$ derived from the bus admittance matrix $\mathbf{Y}_{\text{bus}}$. Message passing propagates information along the grid topology, so each layer extends the receptive field by one hop.
 
@@ -159,9 +157,9 @@ Each architecture is trained across a sweep of physics weights $\lambda \in \{0,
 \toprule
 \textbf{Property} & \textbf{MLP} & \textbf{GNN} & \textbf{TCN} \\
 \midrule
-Input & 78-dim vector & Per-node features & 12-h time window \\
-Hidden layers & 4 $\times$ 1024 & 3 $\times$ 128 & 5 dilated blocks \\
-Parameters & ${\sim}3.2$M & 86,402 & ${\sim}150$K \\
+Input & 114-dim vector & Per-node features & 12-h time window \\
+Hidden layers & 2 $\times$ 256 & 3 $\times$ 128 & 5 dilated blocks \\
+Parameters & 112,194 & 86,402 & 256,706 \\
 Receptive field & All 33 buses & 3 hops & 12 hours \\
 Best $\lambda$ (Aug.) & 0.1 & 0.001 & 0.01 \\
 \bottomrule
@@ -175,6 +173,14 @@ Best $\lambda$ (Aug.) & 0.1 & 0.001 & 0.01 \\
 
 \subsection{Trend 1: Accuracy--Resilience Trade-off}
 
+\begin{figure*}[h]
+    \centering
+    \includegraphics[width=0.8\textwidth]{vm_rmse_vs_coverage_comparison.png}
+    \caption{Voltage magnitude RMSE versus PMU coverage for all three models under clean and augmented training. The MLP shows steep degradation under clean training while the TCN remains stable. With augmented training, all models improve, with the MLP achieving the lowest absolute error.}
+    \label{fig:dropout}
+\end{figure*}
+
+
 The most striking trend in our results is the divergence between accuracy under controlled conditions and resilience under surprise failures. Fig.~\ref{fig:dropout} illustrates this clearly.
 
 Under \textbf{clean training}, where models have never seen missing sensors, increasing the PMU dropout from 10\% to 50\% reveals dramatically different behaviors. The MLP's $|V|$ RMSE rises from $0.000772$~pu to $0.002038$~pu---a $+164\%$ increase. The GNN shows a similar upward trend, climbing from $0.001497$~pu to $0.002117$~pu ($+41.4\%$). By contrast, the TCN only rises from $0.001058$~pu to $0.001330$~pu ($+25.7\%$).
@@ -183,14 +189,14 @@ This trend has a clear explanation. The TCN maintains a 12-hour sliding window o
 
 Under \textbf{augmented training}, the picture reverses. The MLP, now trained to expect missing sensors, becomes the accuracy champion: $|V|$ RMSE of $0.000515$~pu at 50\% dropout (Table~\ref{tab:results}). This is because the MLP's dense all-to-all connections allow it to learn cross-correlations between every pair of buses. When trained with random masking, it effectively learns to reconstruct any missing bus from the surviving ones.
 
-\begin{figure}[t]
+\begin{figure*}[h]
     \centering
-    \includegraphics[width=\columnwidth]{vm_rmse_vs_coverage_comparison.png}
-    \caption{Voltage magnitude RMSE versus PMU coverage for all three models under clean and augmented training. The MLP shows steep degradation under clean training while the TCN remains stable. With augmented training, all models improve, with the MLP achieving the lowest absolute error.}
-    \label{fig:dropout}
-\end{figure}
+    \includegraphics[width=0.9\textwidth]{lambda_sensitivity_cross_model.png}
+    \caption{Physics weight $\lambda$ sensitivity under augmented training at 50\% PMU dropout. Moderate values ($\lambda \le 0.1$) maintain accuracy, while aggressive values ($\lambda \ge 10$) degrade performance---the ``Pareto cliff'' caused by ${\pm}10\%$ pseudo-measurement noise.}
+    \label{fig:lambda}
+\end{figure*}
 
-\begin{table}[t]
+\begin{table}[hb]
 \centering
 \caption{Performance at 50\% PMU Dropout (Best $\lambda$ per Model)}
 \label{tab:results}
@@ -210,6 +216,7 @@ Augmented & TCN & $8.84 \times 10^{-4}$ & 0.0167 & $+30.6\%$ \\
 \end{tabular}
 \end{table}
 
+
 \subsection{Trend 2: The Topological Horizon of GNNs}
 
 A consistent trend across both training regimes is that the GNN underperforms the MLP and TCN. Under augmented training at 50\% dropout, the GNN achieves $|V|$ RMSE of $0.001295$~pu---roughly $2.5\times$ worse than the MLP ($0.000515$~pu) and $1.5\times$ worse than the TCN ($0.000884$~pu).
@@ -226,16 +233,9 @@ The root cause is the nature of the physics constraint. The AC power-flow residu
 
 This \textit{Pareto cliff} has a practical implication: physics-informed regularization is beneficial only when calibrated against the quality of available pseudo-measurements. For the best augmented models, the optimal $\lambda$ values were $0.1$ (MLP), $0.001$ (GNN), and $0.01$ (TCN).
 
-\begin{figure}[t]
-    \centering
-    \includegraphics[width=\columnwidth]{lambda_sensitivity_cross_model.png}
-    \caption{Physics weight $\lambda$ sensitivity under augmented training at 50\% PMU dropout. Moderate values ($\lambda \le 0.1$) maintain accuracy, while aggressive values ($\lambda \ge 10$) degrade performance---the ``Pareto cliff'' caused by ${\pm}10\%$ pseudo-measurement noise.}
-    \label{fig:lambda}
-\end{figure}
-
 \subsection{Inference Latency}
 
-Table~\ref{tab:latency} summarizes the CUDA inference latency. The MLP achieves sub-millisecond latency ($0.223$~ms), making it suitable for sub-cycle protection applications running at 50/60~Hz. The GNN and TCN are slower ($1.157$~ms and $2.199$~ms respectively) due to graph convolution and temporal window processing, but both fall well within the 20--50~ms reporting intervals of typical PMU/SCADA systems.
+Table~\ref{tab:latency} summarizes the CUDA inference latency. The MLP achieves sub-millisecond latency ($0.223$~ms), making it suitable for sub-cycle protection applications running at 50/60~Hz. The TCN and GNN require $2.199$~ms and $2.262$~ms respectively due to temporal window processing and graph convolution/degree normalization overhead, but all three fall well within the 20--50~ms reporting intervals of typical PMU/SCADA systems.
 
 \begin{table}[t]
 \centering
@@ -246,8 +246,8 @@ Table~\ref{tab:latency} summarizes the CUDA inference latency. The MLP achieves 
 \toprule
  & \textbf{MLP} & \textbf{GNN} & \textbf{TCN} \\
 \midrule
-Latency (ms) & 0.223 & 1.157 & 2.199 \\
-Relative to MLP & $1.0\times$ & $5.2\times$ & $9.9\times$ \\
+Latency (ms) & 0.223 & 2.262 & 2.199 \\
+Relative to MLP & $1.0\times$ & $10.1\times$ & $9.9\times$ \\
 \bottomrule
 \end{tabular}
 \end{table}
