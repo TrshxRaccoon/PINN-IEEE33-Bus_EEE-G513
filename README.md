@@ -235,7 +235,7 @@ Evaluated on CUDA (`float64` double precision, batch size 1, 300 iterations sync
 
 
 ### Project Contributors
-* **Manan Arora** ([f20240363@goa.bits-pilani.ac.in](mailto:f20240363@goa.bits-pilani.ac.in))
+* **Manan Arora** ([f20240392@goa.bits-pilani.ac.in](mailto:f20240363@goa.bits-pilani.ac.in))
 * **Rehan Siddiqui** ([f20240377@goa.bits-pilani.ac.in](mailto:f20240377@goa.bits-pilani.ac.in))
 * **Vinayak Singh** ([f20240354@goa.bits-pilani.ac.in](mailto:f20240354@goa.bits-pilani.ac.in))
 
